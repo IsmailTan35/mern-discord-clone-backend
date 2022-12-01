@@ -17,7 +17,6 @@ const App = () => {
     res.send("sadas");
   });
 
-  app.listen(3000);
   return app;
 };
 
