@@ -1,5 +1,5 @@
 // import dotenv from "dotenv";
-import express from "./backend/app_server/helper/helperExpress";
+// import express from "./backend/app_server/helper/helperExpress";
 // import {
 //     CreateServer,
 //     webSocket
@@ -9,7 +9,7 @@ import express from "./backend/app_server/helper/helperExpress";
 // import mongoDb from"./backend/app_server/models/mongoDb"
 
 // const env = dotenv.config();
-const app = express();
+// const app = express();
 
 // const port = process.env.PORT || 10000
 // const db = mongoDb()
@@ -19,3 +19,23 @@ const app = express();
 
 // controllerApi(app)
 // controlleWebsocket(socket,"con")
+
+import express from "express";
+import bodyParser from "body-parser";
+// import cors from "./helperCors"
+// import rateLimit from'express-rate-limit'
+import cors from "cors";
+
+const app = express();
+
+// app.use(cors)
+// app.use(bodyParser.json());
+// app.use(bodyParser.urlencoded({ extended: true }));
+// app.use(express.json());
+// app.use(cors());
+// app.use(apiRequestLimiter)
+app.get("/", (req: any, res: any) => {
+  res.send("sadas");
+});
+
+app.listen(3000);
