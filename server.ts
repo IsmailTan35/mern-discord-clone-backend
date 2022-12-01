@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+// import dotenv from "dotenv";
 import express from "./backend/app_server/helper/helperExpress";
 // import {
 //     CreateServer,
@@ -8,7 +8,7 @@ import express from "./backend/app_server/helper/helperExpress";
 // import controlleWebsocket from'./backend/app_server/controller/socketcontroller'
 // import mongoDb from"./backend/app_server/models/mongoDb"
 
-const env = dotenv.config();
+// const env = dotenv.config();
 const app = express();
 
 // const port = process.env.PORT || 10000

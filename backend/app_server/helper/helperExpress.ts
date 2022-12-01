@@ -16,6 +16,8 @@ const App = () => {
   app.get("/", (req: any, res: any) => {
     res.send("sadas");
   });
+
+  app.listen(3000);
   return app;
 };
 
