@@ -29,14 +29,14 @@ const webSocket = (httpServer:any) =>{
 }
 
 const CreateServer= (app:any,port:any) => {
-	const checkPrivateKey = fs.existsSync('/root/projects/private.key')
-	const checkCertificate = fs.existsSync('/root/projects/certificate.crt')
-	const checkCa = fs.existsSync('/root/projects/ca_bundle.crt')
+	const checkPrivateKey = fs.existsSync('/etc/ssl/private/private.key')
+	const checkCertificate = fs.existsSync('/etc/ssl/certs/certificate.crt')
+	const checkCa = fs.existsSync('/etc/ssl/ca/ca_bundle.crt')
 	
 	if(checkPrivateKey && checkCertificate && checkCa){
-		const privateKey = fs.readFileSync('/root/projects/private.key', 'utf8')
-		const certificate = fs.readFileSync('/root/projects/certificate.crt', 'utf8')
-		const ca = fs.readFileSync('/root/projects/ca_bundle.crt', 'utf8')
+		const privateKey = fs.readFileSync('/etc/ssl/private/private.key', 'utf8')
+		const certificate = fs.readFileSync('/etc/ssl/certs/certificate.crt', 'utf8')
+		const ca = fs.readFileSync('/etc/ssl/ca/ca_bundle.crt', 'utf8')
 		
 		const credentials = {
 			key: privateKey,
