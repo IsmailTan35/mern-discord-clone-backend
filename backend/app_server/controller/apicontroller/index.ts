@@ -16,7 +16,7 @@ import messageAll from "./messages/all";
 import path from "path";
 
 export default (app: any) => {
-  app.get("/", (req: any, res: any) => {
+  app.get("/api", (req: any, res: any) => {
     res.send("Hello World!");
   });
   app.post("/api/auth/login", loginPost);
