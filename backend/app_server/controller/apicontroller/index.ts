@@ -19,15 +19,6 @@ import messageAll from "./messages/all";
 import path from "path";
 
 export default (app: any) => {
-  app.get("/", (req: any, res: any) => {
-    res
-      .status(200)
-      .json(
-        req.headers["x-forwarded-for"]?.split(",").shift() ||
-          req.socket?.remoteAddress
-      );
-  });
-
   app.post("/api/auth/login", loginPost);
   app.post("/api/auth/logout", logoutPost);
   app.post("/api/auth/register", registerPost);
