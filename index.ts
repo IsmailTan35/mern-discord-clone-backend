@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import express from "./backend/app_server/helper/helperExpress";
 import {
-  CreateServer,
+  httpServer,
   webSocket,
 } from "./backend/app_server/helper/helperProtocol";
 import controllerApi from "./backend/app_server/controller/apicontroller";
@@ -13,7 +13,7 @@ const app = express();
 
 const port = process.env.PORT || 10000;
 const db = mongoDb();
-const server = CreateServer(app, port);
+const server = httpServer(app, port);
 const socket = webSocket(server);
 // app.io=socket
 
