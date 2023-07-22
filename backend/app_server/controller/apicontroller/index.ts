@@ -8,9 +8,6 @@ import {
   friendsDelete,
 } from "./friend/controllerFriends";
 
-import userSchema from "../../schema/user";
-import serverSchema from "../../schema/server";
-
 import joinServer from "./server/join";
 import createServer from "./server/create";
 import userInfo from "./user/info";
@@ -19,6 +16,9 @@ import messageAll from "./messages/all";
 import path from "path";
 
 export default (app: any) => {
+  app.get("/", (req: any, res: any) => {
+    res.send("Hello World!");
+  });
   app.post("/api/auth/login", loginPost);
   app.post("/api/auth/logout", logoutPost);
   app.post("/api/auth/register", registerPost);
