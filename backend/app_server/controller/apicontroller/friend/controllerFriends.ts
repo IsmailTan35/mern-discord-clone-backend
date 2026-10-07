@@ -19,127 +19,77 @@ const friendsGet = (req:any,res:any) => {
 
 const friendsPost = async (req:any,res:any) => {
     const { token,to } = req.body
-    if(!token || !to) return
-    let io = req.app.io
+    if(!token || typeof to !== "string" || !to.includes("#")) return res.status(400).json("Invalid user tag")
+    const io = req.app.get("io")
 
-    const checkMe={
-        $or:
-        [({
-            token:{
-                $elemMatch:{
-                    $eq:token
-                }
-            }}),
-            ({
-                username:to.split("#")[0],
-                code:eval(to.split("#")[1]),
-            })]
+    const [username, rawCode] = to.split("#")
+    const code = Number(rawCode)
+    if(!username || !Number.isInteger(code)) return res.status(400).json("Invalid user tag")
 
-        }
-        
         try {
-            const check:any = await user.find(checkMe).sort({_id:-1})
-            if(check.length!=2) return
-            if(check[0].username+"#"+check[0].code===check[1].username+"#"+check[1].code) return console.info("me")
-            const filter = {
-                username:check[0].username,
-                code:check[0].code,
-                friends:{
-                    $not: {
-                        $elemMatch:{
-                            $eq:check[1]._id
-                        }
-                    }
-                },
-                blocked:{
-                    $not: {
-                        $elemMatch:{
-                            $eq:check[1]._id
-                        }
-                    }
-                },
-                request:{
-                    $not: {
-                        $elemMatch:{
-                            $eq:{
-                                type: "outgoing",
-                                _id:check[1]._id
-                            }
-                        }
-                    }
-                }
-            }
-    
-            const filter2 = {
-                username:check[1].username,
-                code:check[1].code,
-                friends:{
-                    $not: {
-                        $elemMatch:{
-                                $eq:check[0]._id
-                            }
-                        }
-                    },
-                blocked:{
-                    $not: {
-                        $elemMatch:{
-                                $eq:check[0]._id
-                            }
-                        }
-                    },
-                request:{
-                    $not: {
-                        $elemMatch:{
-                            $eq:{
-                                type: "outgoing",
-                                _id:check[0]._id
-                            }
-                        }
-                    }
-                }
-            }
-            
-            const fromUpdated:any = await user.findOneAndUpdate(filter,{
+            const me:any = await user.findOne({token:{$elemMatch:{$eq:token}}})
+            if(!me) return res.status(401).json("You are not authenticated!")
+
+            const target:any = await user.findOne({username, code})
+            if(!target) return res.status(404).json("User not found!")
+            if(me._id.equals(target._id)) return res.status(400).json("You can't add yourself")
+
+            // Neither side may already be friends, blocked or have a pending request with the other
+            const fromUpdated:any = await user.findOneAndUpdate({
+                _id:me._id,
+                friends:{$ne:target._id},
+                blocked:{$ne:target._id},
+                "request._id":{$ne:target._id},
+            },{
                 $push:{
                     request:{
                         type:"outgoing",
-                        _id:check[1]._id
+                        _id:target._id
                     }
                 }
             })
-        
-            if(!fromUpdated) return res.status(400).json("User not found!");
-        
-            const toUpdated:any = await user.findOneAndUpdate(filter2,{
+
+            if(!fromUpdated) return res.status(400).json("Request already exists")
+
+            const toUpdated:any = await user.findOneAndUpdate({
+                _id:target._id,
+                friends:{$ne:me._id},
+                blocked:{$ne:me._id},
+                "request._id":{$ne:me._id},
+            },{
                 $push:{
                     request:{
                         type:"incoming",
-                        _id:check[0]._id
+                        _id:me._id
                     }
                 }
             })
-        
+
+            if(!toUpdated){
+                await user.updateOne({_id:me._id},{$pull:{request:{_id:target._id}}})
+                return res.status(400).json("Request could not be sent")
+            }
+
             const rawSockets:any = await io.fetchSockets()
-        
-            const sockets =rawSockets.filter((items: { handshake: { auth: { userId: string } } }) =>
-                items.handshake.auth.userId === check[0]._id.toString() || items.handshake.auth.userId === check[1]._id.toString()
-                )
-            if(!sockets || sockets.length<=0) return
-            // rawSockets.map(socket => {
-            //     if(socket.handshake.auth.userId === check[0]._id.toString()){
-            //         socket.emit("newFriendRequest",{
-            //             type:"outgoing",
-            //             code:check[1].code,
-            //         })
-            //     }
-            //     if(socket.handshake.auth.userId === check[1]._id.toString()){
-            //         socket.emit("newFriendRequest",{
-            //             type:"incoming",
-            //             code:check[0].code,
-            //         })
-            //     }
-            //     }
-            // )
+            rawSockets.forEach((socket:any) => {
+                const socketUserId = socket.handshake.auth.userId
+                if(socketUserId === me._id.toString()){
+                    socket.emit("newFriendRequest",{
+                        _id:target._id.toString(),
+                        username:target.username,
+                        code:target.code,
+                        type:"outgoing",
+                    })
+                }
+                if(socketUserId === target._id.toString()){
+                    socket.emit("newFriendRequest",{
+                        _id:me._id.toString(),
+                        username:me.username,
+                        code:me.code,
+                        type:"incoming",
+                    })
+                }
+            })
             res.status(200).json("ok")
         } catch (error) {
             console.error(error)

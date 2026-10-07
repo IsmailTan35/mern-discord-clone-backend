@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken"
 const verifyPost = (req:any,res:any,next:any) => {
   const token = req.body.userAccessToken
   if (token) {
-    jwt.verify(token, "process.env.ACCESS_TOKEN_SECRET", (err:any, userToken:any) => {
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET as string, (err:any, userToken:any) => {
       if (err) {
         return res.status(403).json("Token is not valid!")
       }

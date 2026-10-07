@@ -71,7 +71,13 @@ export default async (io:any, socket:any, data:any)=>{
 	if(res.length<=0) return
 
 	
+	// Only the channels of the user's own servers
 	const res1:any = await serverSchema.aggregate([
+		{
+			$match:{
+				_id:{$in:res.map((server:any)=>server._id)}
+			}
+		},
 		{
 			$lookup:{
 				from:"discordchannels",

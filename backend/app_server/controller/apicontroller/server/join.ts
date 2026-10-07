@@ -4,66 +4,72 @@ import channelSchema from "../../../schema/channel";
 
 export default async (req:any,res:any) => {
 	const token = req.headers.authorization
-	
+	// Accept both a bare code ("hTKzmak") and a full invite link ("https://discord.gg/hTKzmak")
+	const inviteCode = String(req.body.inviteCode || "").trim().split("/").pop()
+	if(!token || !inviteCode) return res.status(400).send("Invalid invite code")
+
 	try {
 		const user:any = await userSchema.aggregate([
 			{$match:{
 				token:{"$in":[token]
 			}}
 		}])
-	
+
 		const server= await serverSchema.aggregate([
-			{$match:{inviteCode:req.body.inviteCode}},
+			{$match:{inviteCode}},
 		])
-	
+
 		if(user.length==0 || server.length==0) return res.status(400).send("Invalid invite code")
-	
+
+		const isMember = server[0].userIDs.some((id:any) => id.toString() === user[0]._id.toString())
+		if(isMember) return res.status(400).send("Already a member")
+
 		const data:any = await userSchema.findOneAndUpdate({
 			_id:user[0]._id
 		},{
-			$push:{
+			$addToSet:{
 				servers:server[0]._id
 			}
 		})
 		const data2:any = await serverSchema.findOneAndUpdate({
 			_id:server[0]._id
 		},{
-			$push:{
+			$addToSet:{
 				userIDs:user[0]._id
 			}
+		},{
+			new:true
 		})
-	
-		if(data.length==0 || data2.length==0) return res.status(400).send("Invalid invite code")
-		
+
+		if(!data || !data2) return res.status(400).send("Invalid invite code")
+
 		const channels:any = await channelSchema.aggregate([
 			{$match:{serverID:server[0]._id.toString()}},
 		])
-		console.log(channels);
-		
-		let io = req.app.io
-		
+
+		res.status(200).send("Success")
+
+		const io = req.app.get("io")
 		const rawSockets:any = await io.fetchSockets()
 		const sockets = rawSockets.filter((socket: { handshake: { auth: { token: any; }; }; }) => socket.handshake.auth.token === token)
-		if(sockets.length==0) return
 
-		sockets.map((socket: { emit: (arg0: string, arg1: { _id: any; servername: any; channels: any; userIDs: any; serverpicture: any; }) => void; }) => {
+		sockets.forEach((socket: any) => {
 			socket.emit('newServer',{
 				_id:data2._id,
 				servername:data2.servername,
 				channels:data2.channels,
 				userIDs:data2.userIDs,
+				inviteCode:data2.inviteCode,
 				serverpicture:data2.serverpicture
 			})
 			channels.forEach((channel: any)=>{
-				socket.emit("newChannel",channel)
+				socket.emit("newChannel",{...channel,onlineUser:[]})
 			})
 		})
-	res.status(200).send("Success")
 
-		
 	} catch (error) {
 		console.error(error)
-		res.status(400).send("error")
+		if(!res.headersSent) res.status(400).send("error")
 	}
 
 }

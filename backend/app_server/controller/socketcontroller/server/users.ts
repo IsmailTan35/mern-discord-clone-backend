@@ -3,10 +3,11 @@ import serverSchema from "../../../schema/server";
 import { ObjectId } from "mongodb";
 
 export default async (io: any, socket: any, data: any) => {
-  const { serverId } = data;
   const token = socket.handshake.auth.token;
-  if (!token) return;
+  if (!token || !data || !ObjectId.isValid(data.serverId)) return;
+  const { serverId } = data;
   try {
+    // Only members of the server may list its users
     const res: any = await userSchema.aggregate([
       {
         $match: {
@@ -16,11 +17,12 @@ export default async (io: any, socket: any, data: any) => {
             },
           },
           servers: {
-            $elemMatch: { $eq: serverId },
+            $in: [new ObjectId(serverId), serverId],
           },
         },
       },
     ]);
+    if (res.length === 0) return;
     const users: any = await serverSchema.aggregate([
       {
         $match: {

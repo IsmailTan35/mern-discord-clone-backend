@@ -15,7 +15,13 @@ const port = process.env.PORT || 10000;
 const db = mongoDb();
 const server = httpServer(app, port);
 const socket = webSocket(server);
-// app.io=socket
+// API controllers reach the socket server through req.app.get("io")
+app.set("io", socket);
+
+// Log failed async handlers instead of letting them crash the process
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled rejection:", reason);
+});
 
 controllerApi(app);
 controlleWebsocket(socket, "con");

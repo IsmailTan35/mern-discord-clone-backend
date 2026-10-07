@@ -1,14 +1,17 @@
 import messageSchema from '../../../schema/message';
+import serverSchema from '../../../schema/server';
+import { isServerMember } from '../../../helper/helperSocket';
+
 export default async (io:any, socket:any, data:any)=>{
 
 	if(!socket.handshake.auth.userId || !data) return
 	let messages:any= []
 	try {
-		
+
 
 	if(data.receiver){
 		 messages = await messageSchema.find({
-			$in:[
+			$or:[
 				{
 					sender:socket.handshake.auth.userId,
 					receiver:data.receiver,
@@ -18,9 +21,12 @@ export default async (io:any, socket:any, data:any)=>{
 					receiver:socket.handshake.auth.userId,
 				}
 			]
-		})
+		}).sort({timestamps:1})
 	}
 	else{
+		const server:any = await serverSchema.findById(data.serverName)
+		if(!isServerMember(server, socket.handshake.auth.userId)) return
+
 		 messages = await messageSchema.aggregate(
 			[
 				{
@@ -37,7 +43,7 @@ export default async (io:any, socket:any, data:any)=>{
 				},
 				{
 					$sort:{
-						createdAt:-1
+						timestamps:1
 					}
 				}
 			]

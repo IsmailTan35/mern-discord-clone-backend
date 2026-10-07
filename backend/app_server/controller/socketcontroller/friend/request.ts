@@ -1,14 +1,15 @@
 import userSchema from "../../../schema/user";
+import { emitToUser } from "../../../helper/helperSocket";
 
 const getFriendRequests = async (io:any, socket:any, data:any) => {
 	const token = socket.handshake.auth.token
 	if(!token) return
 	try {
-		
+
 
 	const res:any = await userSchema.aggregate([
 		{
-			$match:{  
+			$match:{
 				token:{
 					$elemMatch:{
 						$eq:token
@@ -26,7 +27,7 @@ const getFriendRequests = async (io:any, socket:any, data:any) => {
 							$expr:{
 								$in:["$_id","$$req._id"],
 							},
-							
+
 						}
 					},
 					{
@@ -72,215 +73,110 @@ const getFriendRequests = async (io:any, socket:any, data:any) => {
 	}
 }
 
+// The socket's own user is resolved from its token, never from the client payload
+const findMeAndOther = async (socket:any, otherId:any) => {
+	const token = socket.handshake.auth.token
+	if(!token || !otherId) return null
+	const me:any = await userSchema.findOne({token:{$elemMatch:{$eq:token}}})
+	if(!me) return null
+	const other:any = await userSchema.findById(otherId)
+	if(!other || me._id.equals(other._id)) return null
+	return { me, other }
+}
+
 const acceptFriendRequest = async (io:any, socket:any, data:any) => {
-	const token = socket.handshake.auth.token
-	if(!token) return
-	const checkMe = {
-		$or:[
-			({
-			token:{
-				$elemMatch:{
-					$eq:token
-				}
-			}}),
-			({
-				_id:data._id,
-				// username:data.username,
-				// code:data.code,
-			})
-		]
-	}
 	try {
-		
+	const pair = await findMeAndOther(socket, data && data._id)
+	if(!pair) return
+	const { me, other } = pair
 
-	const check:any = await userSchema.find(checkMe)
-	if(check.length!=2) return
-	if(check[0].username+"#"+check[0].code===check[1].username+"#"+check[1].code) return console.info("me")
+	// Only an incoming request can be accepted
 	const update:any = await userSchema.findOneAndUpdate({
-		username:check[0].username,
-		code:check[0].code,
+		_id:me._id,
+		request:{$elemMatch:{_id:other._id,type:"incoming"}}
 	},{
-		$push:{
-			friends:check[1]._id},
+		$addToSet:{
+			friends:other._id},
 		$pull:{
 			request:{
-				_id:check[1]._id
+				_id:other._id
 			}
 		}
 	},
 	{new:true})
+	if(!update) return
 
-	const update2:any = await userSchema.findOneAndUpdate({
-		username:check[1].username,
-		code:check[1].code,
+	await userSchema.updateOne({
+		_id:other._id,
 	},{
-		$push:{
-			friends:check[0]._id},
+		$addToSet:{
+			friends:me._id},
 		$pull:{
 			request:{
-				_id:check[0]._id
+				_id:me._id
 			}
-		}
-	},
-	{new:true})
-	const rawSockets:any = await io.fetchSockets()
-	rawSockets.map((socket:any)=>{
-		if(socket.handshake.auth.userId===check[0]._id.toString()){
-			socket.emit("newFriend",check[1]._id)
-			socket.emit("friendRequestsRemove",{
-				name:check[1].username,
-				code:check[1].code,
-				})
-
-		}
-		if(socket.handshake.auth.userId===check[1]._id.toString()){
-			socket.emit("newFriend",{
-				name:check[0].username,
-				code:check[0].code,
-				})
-			socket.emit("friendRequestsRemove",check[0]._id)
-
 		}
 	})
+
+	const rawSockets:any = await io.fetchSockets()
+	const isOnline = (userId:any) => rawSockets.some((s:any) => s.handshake.auth.userId === userId.toString())
+
+	emitToUser(rawSockets, me._id, "newFriend", { _id:other._id.toString(), username:other.username, code:other.code })
+	emitToUser(rawSockets, me._id, "friendRequestsRemove", { _id:other._id.toString() })
+	emitToUser(rawSockets, other._id, "newFriend", { _id:me._id.toString(), username:me.username, code:me.code })
+	emitToUser(rawSockets, other._id, "friendRequestsRemove", { _id:me._id.toString() })
+
+	if(isOnline(other._id)) emitToUser(rawSockets, me._id, "friendJoin", { userId:other._id.toString(), name:other.username, code:other.code })
+	if(isOnline(me._id)) emitToUser(rawSockets, other._id, "friendJoin", { userId:me._id.toString(), name:me.username, code:me.code })
 } catch (error) {
 	console.error(error)
 
 }
 }
 
-const rejectFriendRequest = async (io:any, socket:any, data:any) => {
-	const token = socket.handshake.auth.token
-	if(!token) return
-	const checkMe = {
-		$or:[
-			({
-			token:{
-				$elemMatch:{
-					$eq:token
-				}
-			}}),
-			({
-				_id:data._id,
-				// username:data.username,
-				// code:data.code,
-			})
-		]
-	}
+// Removes a pending request between the two users. `type` is how the request
+// looks from the caller's side: "incoming" to reject, "outgoing" to cancel.
+const removeFriendRequest = async (io:any, socket:any, data:any, type:string) => {
 	try {
-		
-
-	const check:any = await userSchema.find(checkMe)
-	if(check.length!=2) return
-	if(check[0].username+"#"+check[0].code===check[1].username+"#"+check[1].code) return console.info("me")
+	const pair = await findMeAndOther(socket, data && data._id)
+	if(!pair) return
+	const { me, other } = pair
 
 	const update:any = await userSchema.findOneAndUpdate({
-		username:check[0].username,
-		code:check[0].code,
+		_id:me._id,
+		request:{$elemMatch:{_id:other._id,type}}
 	},{
 		$pull:{
 			request:{
-				_id:check[1]._id
+				_id:other._id
 			}
 		}
 	},
 	{new:true})
+	if(!update) return
 
-	const update2:any = await userSchema.findOneAndUpdate({
-		username:check[1].username,
-		code:check[1].code,
+	await userSchema.updateOne({
+		_id:other._id,
 	},{
 		$pull:{
 			request:{
-				_id:check[1]._id
+				_id:me._id
 			}
-		}
-	},
-	{new:true})
-	const rawSockets:any = await io.fetchSockets()
-	rawSockets.map((socket:any)=>{
-		if(socket.handshake.auth.userId===check[0]._id.toString()){
-			socket.emit("friendRequestsRemove",{
-				name:check[1].username,
-				code:check[1].code,
-				})
-
-		}
-		else if(socket.handshake.auth.userId===check[1]._id.toString()){
-			socket.emit("friendRequestsRemove",check[0]._id)
-
 		}
 	})
+
+	const rawSockets:any = await io.fetchSockets()
+	emitToUser(rawSockets, me._id, "friendRequestsRemove", { _id:other._id.toString() })
+	emitToUser(rawSockets, other._id, "friendRequestsRemove", { _id:me._id.toString() })
 } catch (error) {
 	console.error(error)
 
 }
 }
 
-const cancelFriendRequest = async (io:any,socket:any, data:any) => {
-	const token = socket.handshake.auth.token
-	if(!token) return
-	const checkMe = {
-		$or:[
-			({
-			token:{
-				$elemMatch:{
-					$eq:token
-				}
-			}}),
-			({
-				_id:data._id,
-				// username:data.username,
-				// code:data.code,
-			})
-		]
-	}
-	try {
-		
+const rejectFriendRequest = (io:any, socket:any, data:any) => removeFriendRequest(io, socket, data, "incoming")
 
-	const check:any = await userSchema.find(checkMe)
-	if(check.length!=2) return
-	if(check[0].username+"#"+check[0].code===check[1].username+"#"+check[1].code) return console.info("me")
-
-	const update:any = await userSchema.findOneAndUpdate({
-		username:check[0].username,
-		code:check[0].code,
-	},{
-		$pull:{
-			request:{
-				_id:check[1]._id
-			}}
-	},
-	{new:true})
-
-	const update2:any = await userSchema.findOneAndUpdate({
-		username:check[1].username,
-		code:check[1].code,
-	},{
-		$pull:{
-			request:{
-				_id:check[0]._id
-			}}
-	},
-	{new:true})
-	const rawSockets:any = await io.fetchSockets()
-	rawSockets.map((socket:any)=>{
-		if(socket.handshake.auth.userId===check[0]._id.toString()){
-			socket.emit("friendRequestsRemove",{
-				name:check[1].username,
-				code:check[1].code,
-				})
-
-		}
-		else if(socket.handshake.auth.userId===check[1]._id.toString()){
-			socket.emit("friendRequestsRemove",check[0]._id)
-
-		}
-	})
-	} catch (error) {
-		console.error(error)
-
-	}
-}
+const cancelFriendRequest = (io:any, socket:any, data:any) => removeFriendRequest(io, socket, data, "outgoing")
 
 export {
 	getFriendRequests,

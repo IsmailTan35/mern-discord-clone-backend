@@ -5,20 +5,26 @@ import crypto from "crypto";
 import serverSchema from "../../schema/server";
 import userSchema from "../../schema/user";
 
-const loginPost = async (req: any, res: any) => {
-  let data = req.body;
-  const token = generateAccessToken({});
-  const filter = {
-    email: data.email,
-    password: crypto.createHash("md5").update(data.password).digest("hex"),
-  };
+const isFilled = (value: any) => typeof value === "string" && value.trim() !== "";
 
-  const update = {
-    $push: {
-      token,
-    },
-  };
+const loginPost = async (req: any, res: any) => {
+  let data = req.body || {};
+  if (!isFilled(data.email) || !isFilled(data.password))
+    return res.status(400).json("login failed");
+
   try {
+    const token = generateAccessToken({});
+    const filter = {
+      email: data.email,
+      password: crypto.createHash("md5").update(data.password).digest("hex"),
+    };
+
+    const update = {
+      $push: {
+        token,
+      },
+    };
+
     var user: any = await userSchema.findOneAndUpdate(filter, update);
     if (user) {
       res.status(200).json([
@@ -39,16 +45,25 @@ const loginPost = async (req: any, res: any) => {
   }
 };
 
-const logoutPost = (req: any, res: any) => {
-  const refreshToken: any = req.body.token;
-  // refreshTokens = refreshTokens.filter((token) => token !== refreshToken)
-  res.status(200).json("You logged out successfully.");
+const logoutPost = async (req: any, res: any) => {
+  const token: any = req.body.token || req.headers.authorization;
+  try {
+    if (token) await userSchema.updateOne({ token }, { $pull: { token } });
+    res.status(200).json("You logged out successfully.");
+  } catch (error) {
+    console.error(error);
+    res.status(400).json("logout failed");
+  }
 };
 
 const registerPost = async (req: any, res: any) => {
   try {
-    let data = req.body;
-    if (Object.values(data).length < 3)
+    let data = req.body || {};
+    if (
+      !isFilled(data.username) ||
+      !isFilled(data.email) ||
+      !isFilled(data.password)
+    )
       return res.status(400).send({ error: "no data" });
     var user = new userSchema({
       username: data.username,
@@ -63,29 +78,29 @@ const registerPost = async (req: any, res: any) => {
       servers: [],
     });
 
-    const data2: any = await serverSchema.findOneAndUpdate(
-      {
-        inviteCode: "rmll4nmu",
-      },
-      {
-        $push: {
-          userIDs: user._id,
-        },
-      }
-    );
+    const defaultServer: any = await serverSchema.findOne({
+      inviteCode: "rmll4nmu",
+    });
 
-    if (data2) {
-      user.servers.push(data2._id);
+    if (defaultServer) {
+      user.servers.push(defaultServer._id);
     }
 
-    user.save((err, user) => {
-      console.error(err);
-      err
-        ? res.status(401).json("not registered")
-        : res.status(200).json("registered");
-    });
+    // Save the user first so a failed registration (e.g. duplicate e-mail)
+    // does not leave an orphan id inside the default server
+    await user.save();
+
+    if (defaultServer) {
+      await serverSchema.updateOne(
+        { _id: defaultServer._id },
+        { $addToSet: { userIDs: user._id } }
+      );
+    }
+
+    res.status(200).json("registered");
   } catch (error) {
     console.error(error);
+    res.status(401).json("not registered");
   }
 };
 

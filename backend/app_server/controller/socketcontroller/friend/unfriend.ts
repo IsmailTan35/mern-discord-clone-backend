@@ -1,58 +1,37 @@
 import userSchema from "../../../schema/user";
+import { emitToUser } from "../../../helper/helperSocket";
 
 export default async (io:any, socket:any, data:any)=>{
 	const token = socket.handshake.auth.token
-	if(!token) return
-	const checkMe = {
-		$or:[
-			({
-			token:{
-				$elemMatch:{
-					$eq:token
-				}
-			}}),
-			({
-				username:data.name,
-				code:data.code,
-			})
-		]
-	}
+	if(!token || !data) return
 
 	try {
-		
 
-	const check:any = await userSchema.find(checkMe)
-	if(check.length!=2) return
-	if(check[0].username+"#"+check[0].code===check[1].username+"#"+check[1].code) return console.info("me")
-	const update:any = await userSchema.findOneAndUpdate({
-		username:check[0].username,
-		code:check[0].code,
+
+	const me:any = await userSchema.findOne({token:{$elemMatch:{$eq:token}}})
+	if(!me) return
+	const otherId = data._id || data.userId
+	const other:any = otherId
+		? await userSchema.findById(otherId)
+		: await userSchema.findOne({ username:data.name, code:data.code })
+	if(!other || me._id.equals(other._id)) return
+
+	await userSchema.updateOne({
+		_id:me._id,
 	},{
 		$pull:{
-			friends:check[1]._id}
-	},
-	{new:true})
-
-	const update2:any = await userSchema.findOneAndUpdate({
-		username:check[1].username,
-		code:check[1].code,
-	},{
-		$pull:{
-			friends:check[0]._id}
-	},
-	{new:true})
-	const rawSockets:any = await io.fetchSockets()
-	rawSockets.map((socket:any)=>{
-		if(socket.handshake.auth.userId===check[0]._id.toString()){
-			socket.emit("friendUnFriend",check[1]._id)
-
-
-		}
-		if(socket.handshake.auth.userId===check[1]._id.toString()){
-			socket.emit("friendUnFriend",check[0]._id)
-
-		}
+			friends:other._id}
 	})
+
+	await userSchema.updateOne({
+		_id:other._id,
+	},{
+		$pull:{
+			friends:me._id}
+	})
+	const rawSockets:any = await io.fetchSockets()
+	emitToUser(rawSockets, me._id, "friendUnFriend", { _id:other._id.toString() })
+	emitToUser(rawSockets, other._id, "friendUnFriend", { _id:me._id.toString() })
 	} catch (error) {
 		console.error(error)
 
