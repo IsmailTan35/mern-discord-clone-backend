@@ -4,7 +4,10 @@ const mongoDb = async () =>{
   const email = process.env.EMAIL 
   const password = process.env.PASSWORD  
   const cluster = process.env.CLUSTER 
-  const uri = `mongodb+srv://${email}:${password}@${cluster}.xlfsl.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
+  // MONGO_URI when given (a database next to the server), else the Atlas cluster
+  const uri =
+    process.env.MONGO_URI ||
+    `mongodb+srv://${email}:${password}@${cluster}.xlfsl.mongodb.net/myFirstDatabase?retryWrites=true&w=majority`;
   
   const con = mongoose.connection
 
