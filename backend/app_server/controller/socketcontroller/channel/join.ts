@@ -25,6 +25,14 @@ export default async(io:any, socket:any, data:any)=>{
 	await leaveVoiceRooms(io, socket)
 	socket.join(rawRoomName)
 
+	// The newcomer opens one WebRTC connection to every socket already in the channel
+	const members:any = await io.in(rawRoomName).fetchSockets()
+	socket.emit("voiceChannelMembers", {
+		serverID:data.serverID,
+		channelID:data.channelID,
+		members:members.map((member:any) => member.id).filter((id:string) => id !== socket.id),
+	})
+
 	await emitToServerMembers(io, data.serverID, "joinUserVoiceChannelInChannel", {
 		_id:user[0]._id.toString(),
 		username:user[0].username,

@@ -7,8 +7,6 @@ import sendMessage from "./message/sendMessage";
 import getMessages from "./message/getMessages";
 import disconnect from "./configs/disconnect";
 
-import userSchema from "../../schema/user";
-
 import joinVoiceChannel from "./channel/join"
 import leaveVoiceChannel from "./channel/leave"
 
@@ -26,16 +24,6 @@ const safe = (handler:(...args:any[])=>any) => async (...args:any[]) => {
     } catch (error) {
         console.error(error)
     }
-}
-
-const findUserByToken = async (token:any) => {
-    if(!token) return null
-    const user:any = await userSchema.aggregate([
-        {$match:{
-            token:{"$in":[token]
-        }}
-    }])
-    return user && user.length > 0 ? user[0] : null
 }
 
 export default (io:any,con:any)=>{
@@ -176,41 +164,21 @@ export default (io:any,con:any)=>{
         socket.on("hata", (data:any)=>{
             console.error(data);
         })
-        socket.on("channelSendingSignal", safe(async (data:any) =>{
-            if(!data) return
-            const user:any = await findUserByToken(socket.handshake.auth.token)
-            if(!user) return
+        // Relays a WebRTC offer/answer to one socket of the same voice channel
+        socket.on("voiceSignal", safe(async (data:any) =>{
+            if(!data || !data.to || !data.signal) return
 
             const rawRoomName =`server-${data.serverID}-${data.channelID}`
-            io.to(rawRoomName).emit("userJoinedChannel",{
-                _id:user._id.toString(),
-                username:user.username,
-                code:user.code,
+            if(!socket.rooms.has(rawRoomName)) return
+
+            const members:any = await io.in(rawRoomName).fetchSockets()
+            if(!members.some((member:any) => member.id === data.to)) return
+
+            io.to(data.to).emit("voiceSignal",{
+                from:socket.id,
                 serverID:data.serverID,
                 channelID:data.channelID,
                 signal:data.signal,
-                first:data.first
-            })
-        }))
-
-        socket.on("channelReturningSignal", safe(async (data:any)=>{
-            if(!data) return
-            const user:any = await findUserByToken(socket.handshake.auth.token)
-            if(!user) return
-
-	        let rawSockets =await io.fetchSockets()
-	        rawSockets.forEach((sockett:any)=>{
-                if(sockett.handshake.auth.userId==data.userID){
-                    sockett.emit("channelReturningSignalListener",{
-                        _id:user._id.toString(),
-                        username:user.username,
-                        code:user.code,
-                        serverID:data.serverID,
-                        channelID:data.channelID,
-                        signal:data.signal,
-                        first:data.first
-                    })
-                }
             })
         }))
 

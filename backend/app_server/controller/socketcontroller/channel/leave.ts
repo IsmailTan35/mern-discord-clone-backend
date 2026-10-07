@@ -9,6 +9,8 @@ const leaveVoiceRooms = async (io:any, socket:any) => {
 	for (const room of voiceRooms) {
 		const [, serverID, channelID] = room.split("-")
 		socket.leave(room)
+		// Remaining members close their connection to this socket
+		io.to(room).emit("voicePeerLeft", { socketId: socket.id })
 		await emitToServerMembers(io, serverID, "leftUserVoiceChannelInChannel", {
 			_id: userId,
 			username: name,

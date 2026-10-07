@@ -1,7 +1,11 @@
 import { generateAccessToken } from "../../helper/helperToken";
 import { generateRefreshToken } from "../../helper/helperToken";
 import { UniqueId, UniqueName } from "../../helper/helperGetUniqueID";
-import crypto from "crypto";
+import {
+  hashPassword,
+  isLegacyHash,
+  verifyPassword,
+} from "../../helper/helperPassword";
 import serverSchema from "../../schema/server";
 import userSchema from "../../schema/user";
 
@@ -13,20 +17,20 @@ const loginPost = async (req: any, res: any) => {
     return res.status(400).json("login failed");
 
   try {
-    const token = generateAccessToken({});
-    const filter = {
-      email: data.email,
-      password: crypto.createHash("md5").update(data.password).digest("hex"),
-    };
+    var user: any = await userSchema.findOne({ email: data.email });
+    if (user && (await verifyPassword(data.password, user.password))) {
+      const token = generateAccessToken({});
+      const update: any = {
+        $push: {
+          token,
+        },
+      };
+      // Upgrade old md5 hashes the first time the user logs in
+      if (isLegacyHash(user.password)) {
+        update.$set = { password: await hashPassword(data.password) };
+      }
+      await userSchema.updateOne({ _id: user._id }, update);
 
-    const update = {
-      $push: {
-        token,
-      },
-    };
-
-    var user: any = await userSchema.findOneAndUpdate(filter, update);
-    if (user) {
       res.status(200).json([
         { type: "username", value: user.username },
         { type: "email", value: user.email },
@@ -68,7 +72,7 @@ const registerPost = async (req: any, res: any) => {
     var user = new userSchema({
       username: data.username,
       email: data.email,
-      password: crypto.createHash("md5").update(data.password).digest("hex"),
+      password: await hashPassword(data.password),
       code: UniqueId(),
       friends: [],
       blocked: [],
