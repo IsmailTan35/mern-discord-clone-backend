@@ -30,7 +30,9 @@ export default async(io:any, socket:any, data:any)=>{
 	socket.emit("voiceChannelMembers", {
 		serverID:data.serverID,
 		channelID:data.channelID,
-		members:members.map((member:any) => member.id).filter((id:string) => id !== socket.id),
+		members:members
+			.filter((member:any) => member.id !== socket.id)
+			.map((member:any) => ({ socketId:member.id, userId:member.handshake.auth.userId })),
 	})
 
 	await emitToServerMembers(io, data.serverID, "joinUserVoiceChannelInChannel", {
@@ -39,6 +41,7 @@ export default async(io:any, socket:any, data:any)=>{
 		code:user[0].code,
 		serverID:data.serverID,
 		channelID:data.channelID,
+		streaming:false,
 	})
 	} catch (error) {
 		console.error(error)

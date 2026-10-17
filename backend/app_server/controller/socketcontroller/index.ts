@@ -14,7 +14,7 @@ import listServer from "./server/list"
 import usersServer from "./server/users"
 
 import infoUser from "./user/info"
-import { leaveRooms } from "../../helper/helperSocket";
+import { emitToServerMembers, getVoiceRoom, leaveRooms } from "../../helper/helperSocket";
 
 // Socket.io does not catch errors thrown by async listeners; an unhandled
 // rejection there would take the whole process down
@@ -176,9 +176,35 @@ export default (io:any,con:any)=>{
 
             io.to(data.to).emit("voiceSignal",{
                 from:socket.id,
+                fromUserId:socket.handshake.auth.userId,
                 serverID:data.serverID,
                 channelID:data.channelID,
                 signal:data.signal,
+            })
+        }))
+
+        // Shown to every member of the server, like Discord's green speaking ring
+        socket.on("voiceSpeaking", safe(async (data:any) =>{
+            const voice = getVoiceRoom(socket)
+            if(!voice || !socket.handshake.auth.userId) return
+            await emitToServerMembers(io, voice.serverID, "voiceSpeaking", {
+                userId:socket.handshake.auth.userId,
+                serverID:voice.serverID,
+                channelID:voice.channelID,
+                speaking:!!(data && data.speaking),
+            }, 10000)
+        }))
+
+        // Screen sharing in a voice channel: the "LIVE" badge next to the user
+        socket.on("voiceScreenShare", safe(async (data:any) =>{
+            const voice = getVoiceRoom(socket)
+            if(!voice || !socket.handshake.auth.userId) return
+            socket.data.screenSharing = !!(data && data.sharing)
+            await emitToServerMembers(io, voice.serverID, "voiceScreenShare", {
+                userId:socket.handshake.auth.userId,
+                serverID:voice.serverID,
+                channelID:voice.channelID,
+                sharing:socket.data.screenSharing,
             })
         }))
 

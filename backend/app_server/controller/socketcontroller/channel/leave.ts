@@ -5,6 +5,8 @@ import { emitToServerMembers } from "../../../helper/helperSocket";
 const leaveVoiceRooms = async (io:any, socket:any) => {
 	const { userId, name, code } = socket.handshake.auth
 	const voiceRooms = [...socket.rooms].filter((room:string) => room.startsWith("server-"))
+	// A stream ends with the voice connection it belongs to
+	socket.data.screenSharing = false
 
 	for (const room of voiceRooms) {
 		const [, serverID, channelID] = room.split("-")

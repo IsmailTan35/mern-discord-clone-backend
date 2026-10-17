@@ -15,7 +15,8 @@ export default async (io:any, socket:any, data:any)=>{
 					return {
 						username:name,
 						code:code,
-						_id:userId
+						_id:userId,
+						streaming:!!(socket.data && socket.data.screenSharing)
 					}
 				}}).filter((item:any)=> item!==undefined)
 			return online
