@@ -195,6 +195,21 @@ export default (io:any,con:any)=>{
             }, 10000)
         }))
 
+        // The mute / deafen buttons of the user panel: icons next to the user
+        socket.on("voiceState", safe(async (data:any) =>{
+            const voice = getVoiceRoom(socket)
+            if(!voice || !socket.handshake.auth.userId) return
+            socket.data.selfMute = !!(data && data.selfMute)
+            socket.data.selfDeaf = !!(data && data.selfDeaf)
+            await emitToServerMembers(io, voice.serverID, "voiceState", {
+                userId:socket.handshake.auth.userId,
+                serverID:voice.serverID,
+                channelID:voice.channelID,
+                selfMute:socket.data.selfMute,
+                selfDeaf:socket.data.selfDeaf,
+            })
+        }))
+
         // Screen sharing in a voice channel: the "LIVE" badge next to the user
         socket.on("voiceScreenShare", safe(async (data:any) =>{
             const voice = getVoiceRoom(socket)

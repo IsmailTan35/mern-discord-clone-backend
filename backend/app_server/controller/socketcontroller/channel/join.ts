@@ -24,6 +24,8 @@ export default async(io:any, socket:any, data:any)=>{
 
 	await leaveVoiceRooms(io, socket)
 	socket.join(rawRoomName)
+	socket.data.selfMute = !!data.selfMute
+	socket.data.selfDeaf = !!data.selfDeaf
 
 	// The newcomer opens one WebRTC connection to every socket already in the channel
 	const members:any = await io.in(rawRoomName).fetchSockets()
@@ -42,6 +44,8 @@ export default async(io:any, socket:any, data:any)=>{
 		serverID:data.serverID,
 		channelID:data.channelID,
 		streaming:false,
+		selfMute:socket.data.selfMute,
+		selfDeaf:socket.data.selfDeaf,
 	})
 	} catch (error) {
 		console.error(error)
