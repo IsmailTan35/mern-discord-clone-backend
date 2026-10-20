@@ -19,7 +19,7 @@ const loginPost = async (req: any, res: any) => {
   try {
     var user: any = await userSchema.findOne({ email: data.email });
     if (user && (await verifyPassword(data.password, user.password))) {
-      const token = generateAccessToken({});
+      const token = generateAccessToken({ id: user._id.toString() });
       const update: any = {
         $push: {
           token,

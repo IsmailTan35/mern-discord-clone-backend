@@ -35,6 +35,7 @@ export default async (req: any, res: any) => {
           servername: serverName,
           inviteCode: inviteCode,
           userIDs: [user[0]._id],
+          ownerID: user[0]._id.toString(),
         });
 
         if (files && files.serverPhoto && files.serverPhoto.filepath) {
@@ -113,6 +114,7 @@ export default async (req: any, res: any) => {
             userIDs: svSchema.userIDs,
             inviteCode: svSchema.inviteCode,
             serverpicture: svSchema.serverpicture,
+            ownerID: svSchema.ownerID,
           });
           socket.emit("newChannel", chSchema1);
           socket.emit("newChannel", chSchema2);

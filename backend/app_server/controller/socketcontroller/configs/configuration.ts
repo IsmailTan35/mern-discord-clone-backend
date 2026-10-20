@@ -1,4 +1,5 @@
 import userSchema from "../../../schema/user";
+import { emitToServerPeers } from "../../../helper/helperSocket";
 
 export default async(io:any,socket:any,data:any)=>{
 	try {
@@ -46,6 +47,8 @@ export default async(io:any,socket:any,data:any)=>{
 	}
 	
 	socket.emit("data", datak);
+	// Server member lists of everyone sharing a server with us show us online
+	await emitToServerPeers(io, ids, "userPresence", { userId: ids, online: true })
 	sockets.map((s:any) => {
 		if(!s.handshake.auth.userId) return
 		s.emit("friendJoin", { 

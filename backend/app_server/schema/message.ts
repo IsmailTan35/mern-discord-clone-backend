@@ -26,6 +26,30 @@ var userSchema = new Schema({
         type:Array,
         default:[]
     },
+    // The message this one replies to, in the same conversation
+    replyTo:{
+        type:String,
+        default:null
+    },
+    // Users written as <@userId> in the text
+    mentions:{
+        type:Array,
+        default:[]
+    },
+    mentionEveryone:{
+        type:Boolean,
+        default:false
+    },
+    // [{ emoji, users: [userId] }]
+    reactions:{
+        type:Array,
+        default:[]
+    },
+    // Link previews: [{ type, url, siteName, title, description, image, ... }]
+    embeds:{
+        type:Array,
+        default:[]
+    },
     timestamps: {
         type: Date,
         default: Date.now,

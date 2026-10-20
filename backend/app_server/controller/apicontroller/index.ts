@@ -12,6 +12,8 @@ import joinServer from "./server/join";
 import createServer from "./server/create";
 import userInfo from "./user/info";
 import serverInfo from "./server/info";
+import inviteInfo from "./server/invite";
+import { accountGet, accountPut, passwordPut } from "./user/account";
 import messageAll from "./messages/all";
 import path from "path";
 
@@ -32,6 +34,12 @@ export default (app: any) => {
   app.post("/api/server/join", joinServer);
   app.get("/api/server/getName", serverInfo);
   app.post("/api/server", createServer);
+
+  app.get("/api/invite/:code", inviteInfo);
+
+  app.get("/api/user/me", accountGet);
+  app.put("/api/user/me", accountPut);
+  app.put("/api/user/password", passwordPut);
 
   app.get("/api/user/getName", userInfo);
   app.get("/api/user/getMessages", messageAll);

@@ -1,29 +1,12 @@
 import userSchema from "../../../schema/user";
 import serverSchema from "../../../schema/server";
 import server from "../../../schema/server";
+import { getServerOwnerId, getVoiceChannelUsers } from "../../../helper/helperSocket";
 
 export default async (io:any, socket:any, data:any)=>{
 	const token = socket.handshake.auth.token
 	try {
-		
-		let rawSockets =await io.fetchSockets()
-		const findOnlineUser=(serverID:any,channelID:any)=>{
-			const rawRoomName =`server-${serverID}-${channelID}`
-			const online = rawSockets.map((socket:any)=>{
-				if(socket.rooms.has(rawRoomName)){
-					const {name,code,userId}=socket.handshake.auth
-					return {
-						username:name,
-						code:code,
-						_id:userId,
-						streaming:!!(socket.data && socket.data.screenSharing),
-						selfMute:!!(socket.data && socket.data.selfMute),
-						selfDeaf:!!(socket.data && socket.data.selfDeaf)
-					}
-				}}).filter((item:any)=> item!==undefined)
-			return online
-		}
-		
+
 
 	if(!token) return
 	const res:any = await userSchema.aggregate([
@@ -55,7 +38,8 @@ export default async (io:any, socket:any, data:any)=>{
 							userIDs:1,
 							channels:1,
 							inviteCode:1,
-							serverpicture:1
+							serverpicture:1,
+							ownerID:1
 						}
 					}
 				],
@@ -119,6 +103,10 @@ export default async (io:any, socket:any, data:any)=>{
 		}
 	])
 
+	// Read the voice rooms after the database queries, as late as possible
+	const rawSockets:any = await io.fetchSockets()
+	const findOnlineUser = (serverID:any, channelID:any) => getVoiceChannelUsers(rawSockets, serverID, channelID)
+
 	const denem1 = res1.map((channel:any)=>(
 		{
 			...channel,
@@ -126,7 +114,7 @@ export default async (io:any, socket:any, data:any)=>{
 		}
 	))
 	// server.map()
-	socket.emit("serverList",res)
+	socket.emit("serverList",res.map((server:any)=>({ ...server, ownerID:getServerOwnerId(server) })))
 	socket.emit("channelList",denem1)
 } catch (error) {
 	console.error(error)

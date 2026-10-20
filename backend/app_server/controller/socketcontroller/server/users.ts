@@ -1,6 +1,7 @@
 import userSchema from "../../../schema/user";
 import serverSchema from "../../../schema/server";
 import { ObjectId } from "mongodb";
+import { getOnlineUserIds } from "../../../helper/helperSocket";
 
 export default async (io: any, socket: any, data: any) => {
   const token = socket.handshake.auth.token;
@@ -62,7 +63,11 @@ export default async (io: any, socket: any, data: any) => {
         },
       },
     ]);
-    socket.emit("serverUsers", users);
+    const onlineIds = getOnlineUserIds(await io.fetchSockets());
+    socket.emit(
+      "serverUsers",
+      users.map((user: any) => ({ ...user, online: onlineIds.has(String(user.id)) }))
+    );
   } catch (error) {
     console.error(error);
   }

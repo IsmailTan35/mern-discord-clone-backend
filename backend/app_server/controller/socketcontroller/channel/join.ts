@@ -1,6 +1,8 @@
 import userSchema from "../../../schema/user";
 import serverSchema from "../../../schema/server";
-import { emitToServerMembers, isServerMember } from "../../../helper/helperSocket";
+import channelSchema from "../../../schema/channel";
+import { isId } from "../../../helper/helperMessage";
+import { broadcastVoiceChannel, emitToServerMembers, isServerMember } from "../../../helper/helperSocket";
 import { leaveVoiceRooms } from "./leave";
 
 export default async(io:any, socket:any, data:any)=>{
@@ -18,6 +20,10 @@ export default async(io:any, socket:any, data:any)=>{
 
 	const server:any = await serverSchema.findById(data.serverID)
 	if(!isServerMember(server, user[0]._id)) return
+	// The channel may have been deleted while the client still shows it
+	if(!isId(data.channelID)) return
+	const channel = await channelSchema.exists({ _id: data.channelID, serverID: String(data.serverID), type: "voice" })
+	if(!channel) return
 
 	const rawRoomName =`server-${data.serverID}-${data.channelID}`
 	if(socket.rooms.has(rawRoomName)) return
@@ -47,6 +53,7 @@ export default async(io:any, socket:any, data:any)=>{
 		selfMute:socket.data.selfMute,
 		selfDeaf:socket.data.selfDeaf,
 	})
+	await broadcastVoiceChannel(io, data.serverID, data.channelID)
 	} catch (error) {
 		console.error(error)
 

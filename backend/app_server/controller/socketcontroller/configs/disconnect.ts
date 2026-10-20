@@ -1,4 +1,5 @@
 import { leaveVoiceRooms } from "../channel/leave";
+import { emitToServerPeers } from "../../../helper/helperSocket";
 
 // Runs on "disconnecting", while socket.rooms is still populated
 export default async (io:any, socket:any)=>{
@@ -17,4 +18,5 @@ export default async (io:any, socket:any)=>{
 		name,
 		code
 	});
+	await emitToServerPeers(io, userId, "userPresence", { userId, online: false })
 }

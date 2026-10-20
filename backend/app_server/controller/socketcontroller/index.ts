@@ -5,6 +5,9 @@ import getFriendAll from "./friend/all";
 import unfriend from "./friend/unfriend";
 import sendMessage from "./message/sendMessage";
 import getMessages from "./message/getMessages";
+import toggleReaction from "./message/react";
+import typing from "./message/typing";
+import manageChannel from "./channel/manage";
 import disconnect from "./configs/disconnect";
 
 import joinVoiceChannel from "./channel/join"
@@ -26,32 +29,60 @@ const safe = (handler:(...args:any[])=>any) => async (...args:any[]) => {
     }
 }
 
+// How long an event waits for "configuration" before running anyway
+const CONFIGURATION_WAIT_MS = 5000
+
 export default (io:any,con:any)=>{
     io.db = con;
     io.on("connection", (socket:any) => {
-        socket.on("configuration", safe((data:any) => configuration(io, socket, data)))
+        // "configuration" finds out who this socket belongs to with a database
+        // lookup. Events sent right after connecting (the server list, joining a
+        // voice channel, ...) wait for it instead of being dropped for having no
+        // user yet. Promise reactions run in order, so the events stay in order.
+        let markConfigured = () => {}
+        const configured = new Promise<void>(resolve => { markConfigured = resolve })
+        const afterConfiguration = (handler:(...args:any[])=>any) => safe(async (...args:any[]) => {
+            await Promise.race([configured, new Promise(resolve => setTimeout(resolve, CONFIGURATION_WAIT_MS))])
+            return handler(...args)
+        })
+
+        socket.on("configuration", safe(async (data:any) => {
+            await configuration(io, socket, data)
+            if(socket.handshake.auth.userId) markConfigured()
+        }))
 
         socket.on("disconnecting", safe(() => disconnect(io, socket)))
 
-        socket.on("getFriendRequests", safe((data:any) => getFriendRequests(io, socket, data)))
+        socket.on("getFriendRequests", afterConfiguration((data:any) => getFriendRequests(io, socket, data)))
 
-        socket.on("getFriendBlockeds", safe((data:any) => getFriendBlockeds(io, socket, data)))
+        socket.on("getFriendBlockeds", afterConfiguration((data:any) => getFriendBlockeds(io, socket, data)))
 
-        socket.on("getFriendAll", safe((data:any) => getFriendAll(io, socket, data)))
+        socket.on("getFriendAll", afterConfiguration((data:any) => getFriendAll(io, socket, data)))
 
-        socket.on("acceptFriendRequest", safe((data:any) => acceptFriendRequest(io, socket, data)))
+        socket.on("acceptFriendRequest", afterConfiguration((data:any) => acceptFriendRequest(io, socket, data)))
 
-        socket.on("rejectFriendRequest", safe((data:any) => rejectFriendRequest(io, socket, data)))
+        socket.on("rejectFriendRequest", afterConfiguration((data:any) => rejectFriendRequest(io, socket, data)))
 
-        socket.on("cancelFriendRequest", safe((data:any) => cancelFriendRequest(io, socket, data)))
+        socket.on("cancelFriendRequest", afterConfiguration((data:any) => cancelFriendRequest(io, socket, data)))
 
-        socket.on("unfriend", safe((data:any) => unfriend(io, socket, data)))
+        socket.on("unfriend", afterConfiguration((data:any) => unfriend(io, socket, data)))
 
-        socket.on("sendMessage", safe((data:any) => sendMessage(io, socket, data)))
+        socket.on("sendMessage", afterConfiguration((data:any) => sendMessage(io, socket, data)))
 
-        socket.on("getMessages", safe((data:any) => getMessages(io, socket, data)))
+        socket.on("getMessages", afterConfiguration((data:any) => getMessages(io, socket, data)))
 
-        socket.on("call video chat", safe(async (user:any) => {
+        socket.on("toggleReaction", afterConfiguration((data:any) => toggleReaction(io, socket, data)))
+
+        socket.on("typing", afterConfiguration((data:any) => typing(io, socket, data)))
+
+        // Channel management by the server owner; answers through the acknowledgement
+        socket.on("createChannel", afterConfiguration((data:any, ack:any) => manageChannel.create(io, socket, data, ack)))
+
+        socket.on("updateChannel", afterConfiguration((data:any, ack:any) => manageChannel.update(io, socket, data, ack)))
+
+        socket.on("deleteChannel", afterConfiguration((data:any, ack:any) => manageChannel.remove(io, socket, data, ack)))
+
+        socket.on("call video chat", afterConfiguration(async (user:any) => {
             if(!user || !user.receiver) return
             const rawSockets:any = await io.fetchSockets()
             const rcvSockets = rawSockets.filter((items:any) => items.handshake.auth.userId === user.receiver)
@@ -78,7 +109,7 @@ export default (io:any,con:any)=>{
             })
         }))
 
-        socket.on("answerCall", safe(async (data:any)=> {
+        socket.on("answerCall", afterConfiguration(async (data:any)=> {
             if(!data) return
             const rawSockets:any = await io.fetchSockets()
 
@@ -102,7 +133,7 @@ export default (io:any,con:any)=>{
             }
         }))
 
-        socket.on("rejectCall", safe(async (data:any) =>{
+        socket.on("rejectCall", afterConfiguration(async (data:any) =>{
             if(!data || !data.callerId) return
             const rawSockets:any = await io.fetchSockets()
 
@@ -111,7 +142,7 @@ export default (io:any,con:any)=>{
             leaveRooms(caller, "webRTC-")
             caller.emit("rejectedCall")
         }))
-        socket.on("callCancel", safe(async (data:any) =>{
+        socket.on("callCancel", afterConfiguration(async (data:any) =>{
             if(!data) return
             leaveRooms(socket, "webRTC-")
             const rawSockets:any = await io.fetchSockets()
@@ -130,7 +161,7 @@ export default (io:any,con:any)=>{
             io.to(payload.receiver).emit('receiving returned signal', { signal: payload.signal, from: socket.id });
         });
 
-        socket.on("hangupCall", safe(async (payload:any) => {
+        socket.on("hangupCall", afterConfiguration(async (payload:any) => {
             for(const value of [...socket.rooms]){
                 if(value.includes("webRTC-")){
                     let roomID = value
@@ -153,13 +184,13 @@ export default (io:any,con:any)=>{
             }
         }))
 
-        socket.on('getServerList', safe((data:any) => listServer(io, socket, data)))
+        socket.on('getServerList', afterConfiguration((data:any) => listServer(io, socket, data)))
 
-        socket.on('getServerUsers', safe((data:any) => usersServer(io, socket, data)))
+        socket.on('getServerUsers', afterConfiguration((data:any) => usersServer(io, socket, data)))
 
-        socket.on('getUserInfo', safe((data:any) => infoUser(io, socket, data)))
+        socket.on('getUserInfo', afterConfiguration((data:any) => infoUser(io, socket, data)))
 
-        socket.on("joinVoiceChannel", safe((data:any) => joinVoiceChannel(io, socket, data)))
+        socket.on("joinVoiceChannel", afterConfiguration((data:any) => joinVoiceChannel(io, socket, data)))
 
         socket.on("hata", (data:any)=>{
             console.error(data);
@@ -184,7 +215,7 @@ export default (io:any,con:any)=>{
         }))
 
         // Shown to every member of the server, like Discord's green speaking ring
-        socket.on("voiceSpeaking", safe(async (data:any) =>{
+        socket.on("voiceSpeaking", afterConfiguration(async (data:any) =>{
             const voice = getVoiceRoom(socket)
             if(!voice || !socket.handshake.auth.userId) return
             await emitToServerMembers(io, voice.serverID, "voiceSpeaking", {
@@ -196,7 +227,7 @@ export default (io:any,con:any)=>{
         }))
 
         // The mute / deafen buttons of the user panel: icons next to the user
-        socket.on("voiceState", safe(async (data:any) =>{
+        socket.on("voiceState", afterConfiguration(async (data:any) =>{
             const voice = getVoiceRoom(socket)
             if(!voice || !socket.handshake.auth.userId) return
             socket.data.selfMute = !!(data && data.selfMute)
@@ -211,7 +242,7 @@ export default (io:any,con:any)=>{
         }))
 
         // Screen sharing in a voice channel: the "LIVE" badge next to the user
-        socket.on("voiceScreenShare", safe(async (data:any) =>{
+        socket.on("voiceScreenShare", afterConfiguration(async (data:any) =>{
             const voice = getVoiceRoom(socket)
             if(!voice || !socket.handshake.auth.userId) return
             socket.data.screenSharing = !!(data && data.sharing)
@@ -223,7 +254,7 @@ export default (io:any,con:any)=>{
             })
         }))
 
-        socket.on("leaveAllChannels", safe((data:any) => leaveVoiceChannel(io, socket, data)))
+        socket.on("leaveAllChannels", afterConfiguration((data:any) => leaveVoiceChannel(io, socket, data)))
 
     })
 }

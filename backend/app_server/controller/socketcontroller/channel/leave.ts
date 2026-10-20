@@ -1,4 +1,4 @@
-import { emitToServerMembers } from "../../../helper/helperSocket";
+import { broadcastVoiceChannel, emitToServerMembers } from "../../../helper/helperSocket";
 
 // Voice channel rooms are named `server-<serverID>-<channelID>`. Only those rooms
 // are left here: the socket's own id room is needed for direct signalling.
@@ -20,6 +20,7 @@ const leaveVoiceRooms = async (io:any, socket:any) => {
 			serverID,
 			channelID,
 		})
+		await broadcastVoiceChannel(io, serverID, channelID)
 	}
 }
 

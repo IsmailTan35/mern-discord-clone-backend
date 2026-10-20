@@ -14,6 +14,11 @@ var serverSchema = new Schema({
     userIDs:{
         type:Array,
     },
+    // May manage the channels. Servers from before this field existed fall
+    // back to their first member, who created them.
+    ownerID:{
+        type:String,
+    },
     channels:{
         type:Array
     },
