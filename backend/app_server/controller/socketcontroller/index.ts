@@ -192,8 +192,8 @@ export default (io:any,con:any)=>{
 
         socket.on("joinVoiceChannel", afterConfiguration((data:any) => joinVoiceChannel(io, socket, data)))
 
-        socket.on("hata", (data:any)=>{
-            console.error(data);
+        socket.on("clientError", (data:any)=>{
+            console.error("Client error:", data);
         })
         // Relays a WebRTC offer/answer to one socket of the same voice channel
         socket.on("voiceSignal", safe(async (data:any) =>{

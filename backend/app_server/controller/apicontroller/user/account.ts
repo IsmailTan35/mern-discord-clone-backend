@@ -5,7 +5,8 @@ import { emitToUsers } from "../../../helper/helperMessage";
 
 // The "My Account" page: read the account, change the username or e-mail,
 // change the password. Every change needs the current password, like Discord.
-// Errors come back as { error, field } so the form can show them in place.
+// Errors come back as { error, code, field } so the form can show them in
+// place; `code` is stable for the client to translate, `error` is readable.
 
 const USERNAME = /^[^@#:`]{2,32}$/
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -24,16 +25,16 @@ const toAccount = (user:any) => ({
 	email: user.email,
 })
 
-const fail = (res:any, status:number, error:string, field?:string) => res.status(status).json({ error, field })
+const fail = (res:any, status:number, code:string, error:string, field?:string) => res.status(status).json({ error, code, field })
 
 const accountGet = async (req:any, res:any) => {
 	try {
 		const user:any = await currentUser(req)
-		if(!user) return fail(res, 401, "Oturum bulunamadı.")
+		if(!user) return fail(res, 401, "sessionNotFound", "Session not found.")
 		res.status(200).json(toAccount(user))
 	} catch (error) {
 		console.error(error)
-		fail(res, 400, "Hesap bilgileri alınamadı.")
+		fail(res, 400, "accountLoadFailed", "Could not load the account.")
 	}
 }
 
@@ -41,27 +42,27 @@ const accountPut = async (req:any, res:any) => {
 	const body = req.body || {}
 	try {
 		const user:any = await currentUser(req)
-		if(!user) return fail(res, 401, "Oturum bulunamadı.")
+		if(!user) return fail(res, 401, "sessionNotFound", "Session not found.")
 		if(typeof body.password !== "string" || !(await verifyPassword(body.password, user.password)))
-			return fail(res, 400, "Şifre yanlış.", "password")
+			return fail(res, 400, "wrongPassword", "Wrong password.", "password")
 
 		const update:any = {}
 		if(body.username !== undefined){
 			const username = String(body.username).replace(/\s+/g, " ").trim()
 			if(!USERNAME.test(username))
-				return fail(res, 400, "Kullanıcı adı 2-32 karakter olmalı ve @ # : ` içermemeli.", "username")
+				return fail(res, 400, "invalidUsername", "Username must be 2-32 characters and must not contain @ # : `.", "username")
 			if(username !== user.username){
 				if(await userSchema.exists({ username, _id: { $ne: user._id } }))
-					return fail(res, 409, "Bu kullanıcı adı alınmış.", "username")
+					return fail(res, 409, "usernameTaken", "This username is taken.", "username")
 				update.username = username
 			}
 		}
 		if(body.email !== undefined){
 			const email = String(body.email).trim()
-			if(!EMAIL.test(email) || email.length > 254) return fail(res, 400, "Geçerli bir e-posta adresi gir.", "email")
+			if(!EMAIL.test(email) || email.length > 254) return fail(res, 400, "invalidEmail", "Enter a valid e-mail address.", "email")
 			if(email !== user.email){
 				if(await userSchema.exists({ email, _id: { $ne: user._id } }))
-					return fail(res, 409, "Bu e-posta adresi başka bir hesapta kayıtlı.", "email")
+					return fail(res, 409, "emailTaken", "This e-mail address is registered to another account.", "email")
 				update.email = email
 			}
 		}
@@ -84,7 +85,7 @@ const accountPut = async (req:any, res:any) => {
 		}
 	} catch (error) {
 		console.error(error)
-		if(!res.headersSent) fail(res, 400, "Hesap güncellenemedi.")
+		if(!res.headersSent) fail(res, 400, "accountUpdateFailed", "Could not update the account.")
 	}
 }
 
@@ -92,12 +93,12 @@ const passwordPut = async (req:any, res:any) => {
 	const body = req.body || {}
 	try {
 		const user:any = await currentUser(req)
-		if(!user) return fail(res, 401, "Oturum bulunamadı.")
+		if(!user) return fail(res, 401, "sessionNotFound", "Session not found.")
 		if(typeof body.password !== "string" || !(await verifyPassword(body.password, user.password)))
-			return fail(res, 400, "Mevcut şifre yanlış.", "password")
+			return fail(res, 400, "wrongCurrentPassword", "Current password is wrong.", "password")
 		const next = body.newPassword
 		if(typeof next !== "string" || next.length < MIN_PASSWORD_LENGTH || next.length > MAX_PASSWORD_LENGTH)
-			return fail(res, 400, `Yeni şifre en az ${MIN_PASSWORD_LENGTH} karakter olmalı.`, "newPassword")
+			return fail(res, 400, "passwordTooShort", `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`, "newPassword")
 
 		// Other devices are logged out; this one keeps its session
 		const token = req.headers.authorization
@@ -112,7 +113,7 @@ const passwordPut = async (req:any, res:any) => {
 		})
 	} catch (error) {
 		console.error(error)
-		if(!res.headersSent) fail(res, 400, "Şifre değiştirilemedi.")
+		if(!res.headersSent) fail(res, 400, "passwordChangeFailed", "Could not change the password.")
 	}
 }
 

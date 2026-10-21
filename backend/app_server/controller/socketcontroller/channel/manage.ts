@@ -7,7 +7,8 @@ import { leaveVoiceRooms } from "./leave";
 
 // Creating, renaming and deleting channels. Only the server's owner may do
 // this. Every handler answers through the socket.io acknowledgement:
-// { ok: true, channel? } or { ok: false, error } with a message to show.
+// { ok: true, channel? } or { ok: false, code, error }, where `code` is stable
+// for the client to translate and `error` is readable.
 
 const MAX_NAME_LENGTH = 100
 const GROUPS: Record<string, string> = { text: "Text Channels", voice: "Voice Channels" }
@@ -30,6 +31,8 @@ const reply = (ack: any, value: any) => {
 	if (typeof ack === "function") ack(value)
 }
 
+const fail = (ack: any, code: string, error: string) => reply(ack, { ok: false, code, error })
+
 const toClient = (channel: any) => ({
 	_id: channel._id.toString(),
 	channelname: channel.channelname,
@@ -50,9 +53,9 @@ const ownedServer = async (socket: any, serverID: any) => {
 const createChannel = async (io: any, socket: any, data: any, ack: any) => {
 	const type = data && data.type === "voice" ? "voice" : "text"
 	const server = await ownedServer(socket, data && data.serverID)
-	if (!server) return reply(ack, { ok: false, error: "Bu sunucuda kanal oluşturma yetkin yok." })
+	if (!server) return fail(ack, "noCreatePermission", "You may not create channels in this server.")
 	const channelname = normalizeName(data.name, type)
-	if (!channelname) return reply(ack, { ok: false, error: "Geçerli bir kanal adı gir." })
+	if (!channelname) return fail(ack, "invalidChannelName", "Enter a valid channel name.")
 
 	const channel: any = await new channelSchema({
 		channelname,
@@ -79,9 +82,9 @@ const ownedChannel = async (socket: any, channelID: any) => {
 
 const updateChannel = async (io: any, socket: any, data: any, ack: any) => {
 	const { channel, server } = await ownedChannel(socket, data && data.channelID)
-	if (!channel) return reply(ack, { ok: false, error: "Bu kanalı düzenleme yetkin yok." })
+	if (!channel) return fail(ack, "noEditPermission", "You may not edit this channel.")
 	const channelname = normalizeName(data.name, channel.type)
-	if (!channelname) return reply(ack, { ok: false, error: "Geçerli bir kanal adı gir." })
+	if (!channelname) return fail(ack, "invalidChannelName", "Enter a valid channel name.")
 
 	await channelSchema.updateOne({ _id: channel._id }, { $set: { channelname } })
 	const payload = { _id: channel._id.toString(), serverID: server._id.toString(), channelname }
@@ -91,14 +94,14 @@ const updateChannel = async (io: any, socket: any, data: any, ack: any) => {
 
 const deleteChannel = async (io: any, socket: any, data: any, ack: any) => {
 	const { channel, server } = await ownedChannel(socket, data && data.channelID)
-	if (!channel) return reply(ack, { ok: false, error: "Bu kanalı silme yetkin yok." })
+	if (!channel) return fail(ack, "noDeletePermission", "You may not delete this channel.")
 	const serverID = server._id.toString()
 	const channelID = channel._id.toString()
 
 	// Opening a server goes to one of its text channels, so keep at least one
 	if (channel.type === "text") {
 		const textChannels = await channelSchema.countDocuments({ serverID, type: "text" })
-		if (textChannels <= 1) return reply(ack, { ok: false, error: "Sunucunun son metin kanalı silinemez." })
+		if (textChannels <= 1) return fail(ack, "lastTextChannel", "The last text channel of a server cannot be deleted.")
 	}
 
 	await channelSchema.deleteOne({ _id: channel._id })
@@ -122,7 +125,7 @@ const withErrors = (handler: any) => async (io: any, socket: any, data: any, ack
 		await handler(io, socket, data, ack)
 	} catch (error) {
 		console.error(error)
-		reply(ack, { ok: false, error: "Bir hata oluştu, tekrar dene." })
+		fail(ack, "unknown", "Something went wrong, try again.")
 	}
 }
 

@@ -7,7 +7,7 @@ import {
 // Clients send this every few seconds while typing; anything faster is dropped
 const MIN_INTERVAL_MS = 1000
 
-// "<name> yazıyor..." for the others in the conversation
+// "<name> is typing..." for the others in the conversation
 export default async (io:any, socket:any, data:any) => {
 	const { userId, name } = socket.handshake.auth
 	if(!userId || !data) return

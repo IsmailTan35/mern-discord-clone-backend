@@ -34,7 +34,7 @@ const mongoDb = async () =>{
 
     setTimeout(()=>{
       mongoose.connect(uri)
-        .catch(err => console.error("hata"));;
+        .catch(err => console.error("MongoDB connection failed:", err.message));
     },5000)
   })
 
@@ -43,7 +43,7 @@ const mongoDb = async () =>{
   })
 
   mongoose.connect(uri)
-    .catch(err => console.error("hata"));;
+    .catch(err => console.error("MongoDB connection failed:", err.message));
 
   return con
 }
